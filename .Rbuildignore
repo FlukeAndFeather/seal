@@ -1,2 +1,4 @@
 ^seal\.Rproj$
 ^\.Rproj\.user$
+^vignettes/*_files$
+^data-raw$
