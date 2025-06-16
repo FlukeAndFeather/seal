@@ -25,7 +25,7 @@ Suggests:
 VignetteBuilder: quarto
 Imports: 
     magrittr,
-    ranger
+    reticulate
 Depends: 
     R (>= 3.5)
 LazyData: true
