@@ -1,0 +1,67 @@
+---
+title: "exploring-dives"
+format: 
+  html: 
+    toc: true
+    html-math-method: mathjax
+vignette: >
+  %\VignetteIndexEntry{Exploring Dives}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+bibliography: references.bib
+---
+
+
+
+## Summary
+
+### Goal
+
+Create a tool for classifying seal dive types. I believe the relevant references are @robinson2010 and @boeuf1988.
+
+### Approach
+
+Use **active learning** to build a labeled dataset *and* train the model simultaneously. Active learning serves unlabeled examples (in this case, dives) to the expert user (e.g., a marine mammalogist) for classification. This is faster than strictly supervised learning, which requires the user to create the labeled dataset *in advance*. It still has the advantages of using a machine learning algorithm suitable for the task. Here, we'll treat the classification task as a *time series classification* problem and, given the simplicity of the data, use a readily-interpretable algorithm called *Time Series Forest* [@deng2013].
+
+### Data
+
+A large amount of northern elephant seal (*Mirounga angustirostris*) was published in *Scientific Data* in 2024 [@costa2024], which we'll use here. The level 1 and 2 (ungridded) data were deposited in Dryad [@costa2024a]. I downloaded the 2017 "raw curated" data and placed them in `data-raw/`. They are too large for GitHub (\~650MB), so anyone following along should download the same file (2017_RawCurated.zip) manually.
+
+## Visualize a sample
+
+Show me a handful of dives
+
+
+
+```{r}
+#| label: setup
+
+library(dplyr)
+library(ggplot2)
+devtools::load_all()
+theme_set(theme_bw())
+set.seed(1505)
+
+```
+
+```{r}
+#| label: dives
+
+dive_ids <- sample(unique(seal3d$dive_id), 4)
+for (d in dive_ids) {
+  p <- seal3d %>% 
+    filter(dive_id == d) %>% 
+    ggplot(aes(time, depth)) +
+    geom_line() +
+    scale_x_datetime(date_labels = "%Y-%m-%d %H:%M") +
+    scale_y_reverse("Depth (m)") +
+    theme(axis.title.x = element_blank())
+  print(p)
+}
+
+```
+
+
+
+## Prepare dives
+

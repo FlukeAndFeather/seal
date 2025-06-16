@@ -51,8 +51,24 @@ tsf_fit <- function(tsf, X, y) {
   tsf
 }
 
+#' Predict with Time Series Forest Classifier
+#'
+#' Predicts the class probabilities for the provided time series data using a
+#' fitted TimeSeriesForestClassifier.
+#'
+#' @param tsf A fitted TimeSeriesForestClassifier object created using
+#'   `tsf_fit()`.
+#' @param X A data frame or matrix containing the time series data to predict
+#'   on.
+#'
+#' @returns A matrix of class probabilities for each time series in `X`.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   # Do something
+#' }
 tsf_predict <- function(tsf, X) {
   stopifnot(inherits(tsf, "sktime.classification.interval_based._tsf.TimeSeriesForestClassifier"))
   tsf$predict_proba(X)
 }
-

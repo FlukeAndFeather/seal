@@ -49,7 +49,7 @@ assign_dive_id <- function(t, d) {
 }
 
 seal3d <- tibble::tibble(
-  time = as.POSIXct((ncdf4::ncvar_get(dive_nc, "CLEAN_ZOC_TDR1/DATE") - 719529) * 86400,
+  time = as.POSIXct(as.vector((ncdf4::ncvar_get(dive_nc, "CLEAN_ZOC_TDR1/DATE") - 719529) * 86400),
                     tz = "UTC"),
   depth = as.vector(ncdf4::ncvar_get(dive_nc, "CLEAN_ZOC_TDR1/CORR_DEPTH")),
   # Interpolate lon, lat from fitted movement persistence model
