@@ -24,7 +24,8 @@ Suggests:
     tidyr
 VignetteBuilder: quarto
 Imports: 
-    magrittr
+    magrittr,
+    ranger
 Depends: 
     R (>= 3.5)
 LazyData: true
