@@ -75,3 +75,21 @@ preprocess_dives <- function(dive_df) {
   dive_py <- reticulate::r_to_py(dive_standard)
   dive_py$set_index(c("dive_id", "time"))
 }
+
+#' Slice a dive, preserving multi-index
+#'
+#' @param dives A preprocessed dives data frame created by `preprocess_dives()`.
+#' @param dive_id A dive identifier (numeric) to slice the dives data frame.
+#'
+#' @returns A sliced data frame containing only the records for the specified
+#'   dive (with multi-index)
+#' @export
+slice_dive <- function(dives, dive_id) {
+  # I can't believe this is necessary to preserve the multi-index
+  dives$loc[reticulate::tuple(dive_id, py_slice(NULL)),
+            py_slice(NULL)]
+}
+
+add_dive <- function(dives, dive_id) {
+  py_run_string("x = 10")
+}

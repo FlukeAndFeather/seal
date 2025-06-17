@@ -1,97 +1,111 @@
 app_ui <- function() {
   fluidPage(
-    titlePanel("Human-in-the-loop Time Series Labeling & Training"),
+    titlePanel("SEAL Dive Typing"),
 
     sidebarLayout(
       sidebarPanel(
-        uiOutput("label_ui"),
-        actionButton("submit_label", "Submit Label"),
-        actionButton("train_model", "Train Model"),
-        verbatimTextOutput("model_status")
+        tableOutput("label_summary"),
+        br(),
+        actionButton("train_btn", "Train!")
       ),
 
       mainPanel(
-        plotOutput("series_plot"),
-        textOutput("prediction_output")
+        plotOutput("dive_plot"),
+        br(),
+        fluidRow(
+          column(2, actionButton("transit", "Transit")),
+          column(2, actionButton("pelagic_forage", "Pelagic foraging")),
+          column(2, actionButton("benthic_forage", "Benthic foraging")),
+          column(2, actionButton("drift_pos", "Drift (positively buoyant)")),
+          column(2, actionButton("drift_neg", "Drift (negatively buoyant)")),
+          column(2, actionButton("benthic_rest", "Benthic resting"))
+        )
       )
     )
   )
 }
 
-app_server <- function(input, output, session) {
-  rv <- reactiveValues(
-    current_index = 1,
-    labeled_data = labels,
-    model = NULL
-  )
+app_server <- function(dives) {
+  dive_labels <- c(transit = "Transit",
+                   pelagic_forage = "Pelagic foraging",
+                   benthic_forage = "Benthic foraging",
+                   drift_pos = "Drift (positively buoyant)",
+                   drift_neg = "Drift (negatively buoyant)",
+                   benthic_rest = "Benthic resting")
 
-  current_series <- reactive({
-    all_series[[rv$current_index]]
-  })
+  function(input, output, session) {
+    rv <- reactiveValues(
+      current_dive = sample(unique(na.omit(dives$dive_id)), 1),
+      # TODO: make model hyperparameters customizable
+      model = tsf(min_interval = 3, n_estimators = 200, n_jobs = 1, random_state = 42),
+      py_dives = preprocess_dives(dives),
+      train_labels = tibble::tibble(dive_id = integer(),
+                                    dive_label = character()),
+      train_dives = NULL,
+      predictions = NULL
+    )
 
-  output$series_plot <- renderPlot({
-    df <- current_series()
-    ggplot(df, aes(x = time, y = value)) +
-      geom_line() +
-      ggtitle(paste("Time Series ID:", df$id[1]))
-  })
+    current_dive <- reactive({
+      dplyr::filter(dives, dive_id == rv$current_dive)
+    })
 
-  output$label_ui <- renderUI({
-    selectInput("label_input", "Label this time series:", choices = c("Class A", "Class B", "Class C"))
-  })
+    output$dive_plot <- renderPlot({
+      pred_label <- NULL
+      if(!is.null(rv$predictions)) {
+        pred_proba <- rv$predictions[rv$current_dive, ]
+        pred_label <- sprintf("%s (%.2f%%)",
+                              dive_labels[which.max(pred_proba)],
+                              max(pred_proba) * 100)
+      }
+      dive <- dplyr::filter(dives, dive_id == rv$current_dive)
+      context_buffer <- 2 # 2 dives on either side
+      context <- dplyr::filter(dives, between(dive_id, dive$dive_id[1] - 2, dive$dive_id[1] + 2))
+      ggplot(context, aes(time, depth)) +
+        geom_line() +
+        geom_line(data = dive,
+                  linewidth = 2) +
+        scale_x_datetime(date_labels = "%Y-%m-%d %H:%M") +
+        scale_y_reverse("Depth (m)") +
+        labs(title = pred_label) +
+        theme(axis.title.x = element_blank())
+    })
 
-  observeEvent(input$submit_label, {
-    id <- current_series()$id[1]
-    label <- input$label_input
-    rv$labeled_data <- rv$labeled_data %>%
-      filter(id != !!id) %>%
-      bind_rows(data.frame(id = id, label = label))
+    output$label_summary <- renderTable({
+      dplyr::count(rv$train_labels, dive_label)
+    })
 
-    # Advance to next unlabeled series
-    unlabeled_ids <- setdiff(sapply(all_series, function(s) s$id[1]), rv$labeled_data$id)
-    if (length(unlabeled_ids) > 0) {
-      rv$current_index <- which(sapply(all_series, function(s) s$id[1]) == unlabeled_ids[1])
-    } else {
-      rv$current_index <- 1
-    }
-  })
+    observeEvent(input$train_btn, {
+      if (nrow(rv$train_labels) < 10) {
+        output$model_status <- renderText("Need at least 10 labeled samples to train.")
+        return()
+      }
 
-  observeEvent(input$train_model, {
-    if (nrow(rv$labeled_data) < 2) {
-      output$model_status <- renderText("Need at least 2 labeled samples to train.")
-      return()
-    }
+      rv$model <- tsf_fit(rv$model, rv$train_dives, rv$train_labels$dive_label)
+      rv$predictions <- tsf_predict(rv$model, rv$py_dives)
+    })
 
-    # Extract features (simple example: mean and std dev)
-    get_features <- function(df) {
-      data.frame(
-        id = df$id[1],
-        mean = mean(df$value),
-        sd = sd(df$value)
+    # Observe dive labeling buttons
+    # Gotta be a better way to do this!
+    observe_label <- function(dive_label) {
+      rv$train_labels <- rbind(
+        rv$train_labels,
+        tibble::tibble(dive_id = rv$current_dive,
+                       dive_label = dive_label)
       )
+      rv$train_dives <- pd$concat(list(rv$train_dives,
+                                       slice_dive(py_dives, rv$current_dive)))
+      rv$current_dive <- sample(unique(na.omit(dives$dive_id)), 1)
     }
+    observeEvent(input$transit, observe_label("transit"))
+    observeEvent(input$pelagic_forage, observe_label("pelagic_forage"))
+    observeEvent(input$benthic_forage, observe_label("benthic_forage"))
+    observeEvent(input$drift_pos, observe_label("drift_pos"))
+    observeEvent(input$drift_neg, observe_label("drift_neg"))
+    observeEvent(input$benthic_rest, observe_label("benthic_rest"))
+  }
+}
 
-    labeled_features <- do.call(rbind, lapply(all_series, get_features)) %>%
-      inner_join(rv$labeled_data, by = "id")
-
-    rf <- randomForest(label ~ mean + sd, data = labeled_features)
-    rv$model <- rf
-    output$model_status <- renderText("Model trained.")
-  })
-
-  output$prediction_output <- renderText({
-    if (!is.null(rv$model)) {
-      current <- current_series()
-      f <- data.frame(
-        mean = mean(current$value),
-        sd = sd(current$value)
-      )
-      pred <- predict(rv$model, f, type = "prob")
-      pred_label <- names(pred)[which.max(pred)]
-      prob <- round(max(pred), 3)
-      paste("Predicted:", pred_label, "| Probability:", prob)
-    } else {
-      "No model trained yet."
-    }
-  })
+run_seal_app <- function(dives) {
+  app <- shiny::shinyApp(ui = app_ui(), server = app_server(dives))
+  shiny::runApp(app, launch.browser = TRUE)
 }

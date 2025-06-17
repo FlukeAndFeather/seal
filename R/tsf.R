@@ -47,8 +47,9 @@ tsf <- function(min_interval = 3, n_estimators = 200, n_jobs = 1, random_state =
 tsf_fit <- function(tsf, X, y) {
   stopifnot(inherits(tsf, "sktime.classification.interval_based._tsf.TimeSeriesForestClassifier"))
   tsf2 <- tsf
-  tsf2$fit(X, y)
-  tsf
+  y2 <- pd$Series(y)
+  tsf2$fit(X, y2)
+  tsf2
 }
 
 #' Predict with Time Series Forest Classifier
